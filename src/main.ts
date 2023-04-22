@@ -1,21 +1,42 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, session } from "electron";
+import electronReload from "electron-reload";
 import * as path from "path";
+import { ElectronBlocker } from "@cliqz/adblocker-electron";
+import fetch from "cross-fetch"; // required 'fetch'
 
-function createWindow() {
+async function createWindow() {
   // Create the browser window.
+  const ses = session.fromPartition("persist:youtube");
   const mainWindow = new BrowserWindow({
     height: 600,
     webPreferences: {
+      session: ses,
       preload: path.join(__dirname, "preload.js"),
+      nodeIntegration: false,
+      contextIsolation: false,
+      nodeIntegrationInSubFrames: true,
     },
+    maximizable: false,
     width: 800,
   });
 
-  // and load the index.html of the app.
-  mainWindow.loadFile(path.join(__dirname, "../index.html"));
+  ElectronBlocker.fromPrebuiltAdsAndTracking(fetch).then(
+    (blocker: ElectronBlocker) => {
+      blocker.enableBlockingInSession(ses);
+    }
+  );
 
-  // Open the DevTools.
-  mainWindow.webContents.openDevTools();
+  mainWindow.webContents.userAgent =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:70.0) Gecko/20100101 Firefox/70.0";
+
+  // and load the index.html of the app.
+
+  ses.webRequest.onBeforeSendHeaders((details, callback) => {
+    details.requestHeaders["User-Agent"] = "Chrome";
+    callback({ cancel: false, requestHeaders: details.requestHeaders });
+  });
+
+  mainWindow.loadURL("https://www.youtube.com");
 }
 
 // This method will be called when Electron has finished
